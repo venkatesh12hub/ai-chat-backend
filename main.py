@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 import json
 import asyncio
+import os
 from typing import List, Dict
 
 app = FastAPI()
@@ -16,8 +18,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Store conversation history (use Redis/DB in production)
 conversations: Dict[str, List[Dict]] = {}
+
+# Make Ollama host configurable (for Render deployment)
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 class ChatRequest(BaseModel):
     message: str
@@ -38,12 +46,16 @@ Behavior rules:
 - Keep answers accurate and to the point.
 - Do not hallucinate facts about yourself."""
 
+@app.get("/")
+async def read_index():
+    return FileResponse("index.html")
+
 @app.get("/ping")
 async def ping():
     """Health check endpoint"""
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get("http://localhost:11434/api/tags")
+            response = await client.get(f"{OLLAMA_HOST}/api/tags")
             if response.status_code == 200:
                 return {"status": "server is working", "ollama": "connected"}
     except:
@@ -79,7 +91,7 @@ async def stream_chat(req: ChatRequest):
             # Call Ollama API directly (MUCH faster than subprocess)
             async with client.stream(
                 "POST",
-                "http://localhost:11434/api/chat",
+                f"{OLLAMA_HOST}/api/chat",
                 json={
                     "model": "qwen2.5:0.5b",
                     "messages": messages,
@@ -121,7 +133,7 @@ async def stream_chat(req: ChatRequest):
                             continue
                         
     except httpx.ConnectError:
-        error_msg = "AI is currently unavailable. Make sure Ollama is running (ollama serve)"
+        error_msg = f"AI is currently unavailable. Make sure Ollama is running at {OLLAMA_HOST}"
         yield f"data: {json.dumps({'error': error_msg, 'done': True})}\n\n"
         
     except Exception as e:
@@ -144,5 +156,5 @@ if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting optimized AI Chat backend...")
     print("📡 Server: http://127.0.0.1:8000")
-    print("🤖 Make sure Ollama is running: ollama serve")
+    print(f"🤖 Connecting to Ollama at: {OLLAMA_HOST}")
     uvicorn.run(app, host="0.0.0.0", port=8000)
