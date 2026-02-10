@@ -1,5 +1,6 @@
 // Configuration
-const API_URL = "https://inimitable-unperfectively-kylah.ngrok-free.dev/chat";
+// Configuration
+const API_URL = "";
 const SESSION_ID = "user_" + Date.now();
 
 let isGenerating = false;
@@ -16,7 +17,7 @@ let speechSynthesis = window.speechSynthesis;
 
 // Configure marked.js
 marked.setOptions({
-  highlight: function(code, lang) {
+  highlight: function (code, lang) {
     if (lang && hljs.getLanguage(lang)) {
       return hljs.highlight(code, { language: lang }).value;
     }
@@ -43,7 +44,7 @@ function setupEventListeners() {
     }
   });
 
-  input.addEventListener('input', function() {
+  input.addEventListener('input', function () {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 150) + 'px';
   });
@@ -76,7 +77,7 @@ function initVoiceRecognition() {
       if (finalTranscript) {
         input.value = input.value + finalTranscript;
       }
-      
+
       // Show interim results
       const transcriptEl = document.getElementById('voice-transcript');
       if (transcriptEl) {
@@ -115,11 +116,11 @@ function toggleVoiceInput() {
 function startVoiceInput() {
   const voiceBtn = document.getElementById('voice-btn');
   const indicator = document.getElementById('voice-indicator');
-  
+
   isListening = true;
   voiceBtn.classList.add('active');
   indicator.style.display = 'block';
-  
+
   try {
     recognition.start();
   } catch (e) {
@@ -130,11 +131,11 @@ function startVoiceInput() {
 function stopVoiceInput() {
   const voiceBtn = document.getElementById('voice-btn');
   const indicator = document.getElementById('voice-indicator');
-  
+
   isListening = false;
   voiceBtn.classList.remove('active');
   indicator.style.display = 'none';
-  
+
   if (recognition) {
     recognition.stop();
   }
@@ -144,7 +145,7 @@ function toggleVoiceOutput() {
   voiceEnabled = !voiceEnabled;
   const icon = document.getElementById('voice-icon');
   const btn = document.getElementById('voice-toggle');
-  
+
   if (voiceEnabled) {
     icon.textContent = '🔊';
     btn.classList.add('active');
@@ -160,10 +161,10 @@ function toggleVoiceOutput() {
 
 function speakText(text) {
   if (!voiceEnabled) return;
-  
+
   // Cancel any ongoing speech
   speechSynthesis.cancel();
-  
+
   // Clean text for speech (remove markdown, code blocks, etc.)
   const cleanText = text
     .replace(/```[\s\S]*?```/g, 'code block')
@@ -171,22 +172,22 @@ function speakText(text) {
     .replace(/[*_#\[\]()]/g, '')
     .replace(/\n/g, ' ')
     .trim();
-  
+
   if (!cleanText) return;
-  
+
   const utterance = new SpeechSynthesisUtterance(cleanText);
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
   utterance.volume = 1.0;
-  
+
   // Try to use a good voice
   const voices = speechSynthesis.getVoices();
   const preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
-                         voices.find(v => v.lang.startsWith('en'));
+    voices.find(v => v.lang.startsWith('en'));
   if (preferredVoice) {
     utterance.voice = preferredVoice;
   }
-  
+
   speechSynthesis.speak(utterance);
 }
 
@@ -213,7 +214,7 @@ function handleImageSelect(event) {
   reader.onload = (e) => {
     const previewImg = document.getElementById('preview-img');
     const previewDiv = document.getElementById('image-preview');
-    
+
     previewImg.src = e.target.result;
     previewDiv.style.display = 'block';
   };
@@ -231,7 +232,7 @@ async function checkServerStatus() {
   try {
     const response = await fetch(`${API_URL}/ping`);
     const data = await response.json();
-    
+
     if (data.status === "server is working") {
       statusDot.style.background = "#4ade80";
       statusDot.title = "Server connected" + (data.vision_available ? " (Vision enabled)" : "");
@@ -260,7 +261,7 @@ async function sendMessage() {
 
   // Add user message
   addUserMessage(text, selectedImage);
-  
+
   input.value = "";
   input.style.height = 'auto';
 
@@ -293,7 +294,7 @@ async function sendMessage() {
       response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           message: text,
           session_id: SESSION_ID
         })
@@ -347,7 +348,7 @@ async function sendMessage() {
   } catch (error) {
     console.error('Error:', error);
     updateAIMessage(
-      currentAIMessage, 
+      currentAIMessage,
       `<span class="error">❌ Backend error. Make sure the server is running.</span>`
     );
   } finally {
@@ -363,7 +364,7 @@ function addUserMessage(content, image) {
   messageDiv.className = "user";
 
   let html = `<b>You:</b> ${escapeHtml(content)}`;
-  
+
   if (image) {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -412,14 +413,14 @@ function updateAIMessage(element, content, isComplete = false) {
 
 function clearChat() {
   const chatBox = document.getElementById("chat-box");
-  
+
   if (confirm("Clear all chat history?")) {
     chatBox.innerHTML = "";
-    
+
     fetch(`${API_URL}/chat/clear?session_id=${SESSION_ID}`, {
       method: 'DELETE'
     }).catch(console.error);
-    
+
     removeImage();
   }
 }
