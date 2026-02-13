@@ -1,11 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import httpx
 import json
-import asyncio
 import os
 from typing import List, Dict
 
@@ -18,143 +16,111 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 # Store conversation history (use Redis/DB in production)
 conversations: Dict[str, List[Dict]] = {}
 
-# Make Ollama host configurable (for Render deployment)
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+GROQ_API_KEY = os.getenv("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")
 
 class ChatRequest(BaseModel):
     message: str
-    session_id: str = "default"  # Track different users/sessions
+    session_id: str = "default"
 
-SYSTEM_PROMPT = """Identity rules (MANDATORY):
-- You are NOT ChatGPT.
-- You are NOT Qwen.
-- You are NOT created by Alibaba, OpenAI, Google, or any company.
-- You must NEVER claim a username, model name, or training origin.
-- If asked about yourself, say you are a general AI assistant created for this app.
-
-Behavior rules:
-- Automatically understand the user's question.
-- Solve math problems step-by-step.
-- Write correct and efficient code when asked.
-- Explain theory clearly and concisely.
-- Keep answers accurate and to the point.
-- Do not hallucinate facts about yourself."""
-
-@app.get("/")
-async def read_index():
-    return FileResponse("index.html")
+SYSTEM_PROMPT = """You are a professional AI assistant.
+- Solve math step-by-step.
+- Write correct and efficient code.
+- Explain clearly and concisely.
+- Be accurate and direct.
+- Never invent information about yourself.
+"""
 
 @app.get("/ping")
 async def ping():
-    """Health check endpoint"""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{OLLAMA_HOST}/api/tags")
-            if response.status_code == 200:
-                return {"status": "server is working", "ollama": "connected"}
-    except:
-        return {"status": "server is working", "ollama": "disconnected"}
+    return {"status": "server is running (Groq cloud mode)"}
+
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    """Streaming chat endpoint - MUCH FASTER than subprocess"""
     return StreamingResponse(
         stream_chat(req),
         media_type="text/event-stream"
     )
 
+
 async def stream_chat(req: ChatRequest):
-    """Stream responses from Ollama in real-time"""
-    
-    # Get or create conversation history
+
     if req.session_id not in conversations:
         conversations[req.session_id] = []
-    
-    # Add user message to history
+
     conversations[req.session_id].append({
         "role": "user",
         "content": req.message
     })
-    
-    # Prepare messages with system prompt
+
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(conversations[req.session_id])
-    
+
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
-            # Call Ollama API directly (MUCH faster than subprocess)
+
             async with client.stream(
                 "POST",
-                f"{OLLAMA_HOST}/api/chat",
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
                 json={
-                    "model": "qwen2.5:0.5b",
+                    "model": "llama3-70b-8192",
                     "messages": messages,
                     "stream": True,
-                    "options": {
-                        "temperature": 0.7,
-                        "num_predict": 2000
-                    }
+                    "temperature": 0.7
                 }
             ) as response:
-                
+
                 full_response = ""
-                
+
                 async for line in response.aiter_lines():
-                    if line.strip():
+
+                    if line and line.startswith("data: "):
+                        data_str = line.replace("data: ", "")
+
+                        if data_str == "[DONE]":
+                            conversations[req.session_id].append({
+                                "role": "assistant",
+                                "content": full_response
+                            })
+
+                            yield f"data: {json.dumps({'done': True})}\n\n"
+                            break
+
                         try:
-                            data = json.loads(line)
-                            
-                            # Get the content chunk
-                            if "message" in data and "content" in data["message"]:
-                                chunk = data["message"]["content"]
-                                full_response += chunk
-                                
-                                # Send chunk to frontend immediately
-                                yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
-                            
-                            # Check if done
-                            if data.get("done", False):
-                                # Save assistant response to history
-                                conversations[req.session_id].append({
-                                    "role": "assistant",
-                                    "content": full_response
-                                })
-                                
-                                yield f"data: {json.dumps({'chunk': '', 'done': True})}\n\n"
-                                break
-                                
-                        except json.JSONDecodeError:
+                            data = json.loads(data_str)
+                            delta = data["choices"][0]["delta"].get("content", "")
+
+                            if delta:
+                                full_response += delta
+                                yield f"data: {json.dumps({'chunk': delta, 'done': False})}\n\n"
+
+                        except:
                             continue
-                        
-    except httpx.ConnectError:
-        error_msg = f"AI is currently unavailable. Make sure Ollama is running at {OLLAMA_HOST}"
-        yield f"data: {json.dumps({'error': error_msg, 'done': True})}\n\n"
-        
+
     except Exception as e:
-        error_msg = f"Error: {str(e)}"
-        yield f"data: {json.dumps({'error': error_msg, 'done': True})}\n\n"
+        yield f"data: {json.dumps({'error': str(e), 'done': True})}\n\n"
+
 
 @app.delete("/chat/clear")
 async def clear_chat(session_id: str = "default"):
-    """Clear conversation history for a session"""
-    if session_id in conversations:
-        conversations[session_id] = []
+    conversations[session_id] = []
     return {"status": "cleared"}
+
 
 @app.get("/chat/history")
 async def get_history(session_id: str = "default"):
-    """Get conversation history"""
     return {"history": conversations.get(session_id, [])}
+
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting optimized AI Chat backend...")
-    print("📡 Server: http://127.0.0.1:8000")
-    print(f"🤖 Connecting to Ollama at: {OLLAMA_HOST}")
+    print("🚀 Starting CLOUD AI backend (Groq)")
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
