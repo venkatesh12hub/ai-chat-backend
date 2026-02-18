@@ -1,6 +1,6 @@
 // Configuration
 // Configuration
-const API_URL = "";
+const API_URL = "https://your-render-url.onrender.com";
 const SESSION_ID = "user_" + Date.now();
 
 let isGenerating = false;
