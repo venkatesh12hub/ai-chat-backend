@@ -1,4 +1,14 @@
+<<<<<<< HEAD
 fastapi
 uvicorn
 pydantic
 httpx
+=======
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+httpx>=0.25.2
+pydantic>=2.5.0
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+gunicorn>=21.2.0
+>>>>>>> ea5487ab3ae03751f398f31920920a9389a37edf

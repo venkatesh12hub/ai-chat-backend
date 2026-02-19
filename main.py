@@ -16,14 +16,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Store conversation history (use Redis/DB in production)
+# In production use Redis/DB instead of memory
 conversations: Dict[str, List[Dict]] = {}
 
-GROQ_API_KEY = os.getenv("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")
+# IMPORTANT: Set this in Render Environment Variables
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
+
 
 SYSTEM_PROMPT = """You are a professional AI assistant.
 - Solve math step-by-step.
@@ -32,6 +34,7 @@ SYSTEM_PROMPT = """You are a professional AI assistant.
 - Be accurate and direct.
 - Never invent information about yourself.
 """
+
 
 @app.get("/ping")
 async def ping():
@@ -47,6 +50,10 @@ async def chat(req: ChatRequest):
 
 
 async def stream_chat(req: ChatRequest):
+
+    if not GROQ_API_KEY:
+        yield f"data: {json.dumps({'error': 'GROQ_API_KEY not set in environment', 'done': True})}\n\n"
+        return
 
     if req.session_id not in conversations:
         conversations[req.session_id] = []

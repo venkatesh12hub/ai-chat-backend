@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AI Chat Application</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+
+<body>
+  <div class="container">
+    <h2>AI Chat Application</h2>
+
+    <!-- Chat messages -->
+    <div id="chat-box"></div>
+
+    <!-- Input area -->
+    <div class="input-area">
+
+      <!-- Voice input -->
+      <button id="voice-btn" onclick="startVoice()" title="Voice Input">
+        🎤
+      </button>
+
+      <!-- Text input -->
+      <input
+        id="user-input"
+        placeholder="Type your message..."
+      />
+
+      <!-- Image upload -->
+      <input
+        type="file"
+        id="imageInput"
+        accept="image/*"
+        title="Upload Image"
+        onchange="sendImage()"
+      />
+
+      <!-- Send button -->
+      <button id="send-btn" onclick="sendMessage()">
+        Send
+      </button>
+
+    </div>
+  </div>
+
+  <script src="static/script.js"></script>
+</body>
+</html>
